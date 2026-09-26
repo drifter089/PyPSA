@@ -1,0 +1,31 @@
+[project]
+name = "pypsa-server"
+version = "0.1.0"
+description = "Request-scoped HTTP API for the local PyPSA source tree"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "pypsa",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "pydantic>=2.10,<3",
+]
+
+[dependency-groups]
+dev = ["httpx>=0.28,<1", "pytest>=8,<10", "ruff>=0.11,<1"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+pypsa = { path = "..", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
