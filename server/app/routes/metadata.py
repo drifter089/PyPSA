@@ -6,12 +6,28 @@ from importlib.metadata import version
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.editor.schemas import (
+    CatalogRequest,
+    CatalogResponse,
+    EditRequest,
+    EditResponse,
+)
 from app.examples import EXAMPLES
 from app.execution import execute
 from app.operations import Operation
 from app.schemas import ComponentRequest, ExampleRequest
 
 router = APIRouter(prefix="/v1", tags=["Metadata"])
+
+
+@router.post("/editor/catalog", response_model=CatalogResponse)
+async def editor_catalog(body: CatalogRequest, request: Request):
+    return await execute(request, Operation.EDITOR_CATALOG, body)
+
+
+@router.post("/editor/evaluate", response_model=EditResponse)
+async def editor_evaluate(body: EditRequest, request: Request):
+    return await execute(request, Operation.EDITOR_EVALUATE, body)
 
 
 @router.get("/capabilities")

@@ -19,6 +19,9 @@ class Operation(StrEnum):
     OPTIMIZE = "optimize"
     POWER_FLOW = "power_flow"
     STATISTICS = "statistics"
+    EDITOR_CATALOG = "editor_catalog"
+    EDITOR_EVALUATE = "editor_evaluate"
+    EDIT_NETWORK = "edit_network"
 
 
 @dataclass(frozen=True)

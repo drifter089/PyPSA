@@ -185,7 +185,7 @@ def main_suite():
         def docs():
             assert client.get("/docs").status_code == 200
             schema = expect(client.get("/openapi.json"))
-            assert len(schema["paths"]) == 11, list(schema["paths"])
+            assert len(schema["paths"]) == 14, list(schema["paths"])
             info = expect(client.get("/v1/capabilities"))
             assert info["concurrency_per_instance"] == 1 and info["solver"] == "highs"
             return {
@@ -201,6 +201,8 @@ def main_suite():
                 ("GET", "/v1/components/Bus"),
                 ("GET", "/v1/examples"),
                 ("GET", "/v1/examples/two-bus"),
+                ("POST", "/v1/editor/catalog"),
+                ("POST", "/v1/editor/evaluate"),
                 *[
                     ("POST", f"/v1/networks/{name}")
                     for name in [
@@ -210,6 +212,7 @@ def main_suite():
                         "optimize",
                         "power-flow",
                         "statistics",
+                        "edit",
                     ]
                 ],
             ]
@@ -223,7 +226,7 @@ def main_suite():
             with httpx.Client(base_url=client.base_url) as anonymous:
                 expect(anonymous.get("/v1/capabilities"), 401)
                 expect(anonymous.get("/healthz"))
-            return "All 10 protected endpoint patterns reject invalid credentials; health remains public"
+            return "All 13 protected endpoint patterns reject invalid credentials; health remains public"
 
         check("Authentication across every protected route", auth)
 
@@ -252,6 +255,64 @@ def main_suite():
             return f"All {len(names)} supported component types returned their metadata"
 
         check("All component metadata", metadata)
+
+        def editor():
+            source = model()
+            described = expect(
+                client.post(
+                    "/v1/editor/catalog",
+                    json={"source": source, "components": ["Generator"]},
+                )
+            )
+            fields = described["component_types"]["Generator"]["fields"]
+            assert fields["p_nom_max"]["default"] == {"kind": "positiveInfinity"}
+            body = {
+                "source": source,
+                "components": ["Generator"],
+                "operations": [
+                    {
+                        "op": "set",
+                        "component": "Generator",
+                        "name": "supply",
+                        "field": "p_nom_extendable",
+                        "value": True,
+                    },
+                    {
+                        "op": "set",
+                        "component": "Generator",
+                        "name": "supply",
+                        "field": "p_nom_max",
+                        "value": 200,
+                    },
+                ],
+            }
+            evaluated = expect(client.post("/v1/editor/evaluate", json=body))
+            assert evaluated["valid"] and evaluated["artifact"] is None
+            assert evaluated["catalog"]["instances"][0]["fields"]["p_nom"]["overridden"]
+            edited = expect(client.post("/v1/networks/edit", json=body))
+            assert edited["applied"] and edited["artifact"]["kind"] == "netcdf"
+            assert post(client, "validate", edited["artifact"])["valid"]
+            invalid = expect(
+                client.post(
+                    "/v1/networks/edit",
+                    json={
+                        "source": source,
+                        "operations": [
+                            {
+                                "op": "set",
+                                "component": "Generator",
+                                "name": "supply",
+                                "field": "p_nom_opt",
+                                "value": 1,
+                            },
+                        ],
+                    },
+                )
+            )
+            assert not invalid["valid"] and invalid["artifact"] is None
+            return "Catalog, conditional forms, transactional edits, and native artifact reload verified"
+
+        check("Editor catalogue, evaluation, and native edits", editor)
 
         examples = {}
 

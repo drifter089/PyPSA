@@ -7,8 +7,10 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from app.editor.schemas import CatalogRequest, EditRequest
 from app.operations import ExecutionContext, Operation
 from app.operations.analyses import optimize_network, power_flow
+from app.operations.editor import describe_editor, edit_network, evaluate_editor
 from app.operations.metadata import component_metadata, load_example
 from app.operations.networks import (
     calculate_statistics,
@@ -38,6 +40,9 @@ class OperationSpec[Payload: BaseModel]:
 
 
 OPERATIONS = {
+    Operation.EDITOR_CATALOG: OperationSpec(CatalogRequest, describe_editor),
+    Operation.EDITOR_EVALUATE: OperationSpec(EditRequest, evaluate_editor),
+    Operation.EDIT_NETWORK: OperationSpec(EditRequest, edit_network),
     Operation.COMPONENT: OperationSpec(ComponentRequest, component_metadata),
     Operation.EXAMPLE: OperationSpec(ExampleRequest, load_example),
     Operation.INSPECT: OperationSpec(InspectRequest, inspect_network),
