@@ -120,6 +120,8 @@ include = ["pypsa"]
 # Pytest settings
 
 [tool.pytest.ini_options]
+# Keep library discovery separate from the backend's own pytest configuration.
+testpaths = ["test"]
 filterwarnings = [
     # Raise warnings as errors
     "error::DeprecationWarning",
@@ -166,7 +168,7 @@ exclude_also = [
 # Static type checker settings
 
 [tool.mypy]
-exclude = ['dev/*', 'examples/*', 'docs/*']
+exclude = ['dev/*', 'examples/*', 'docs/*', '(^|/)server/']
 ignore_missing_imports = true
 no_implicit_optional = true
 warn_unused_ignores = true

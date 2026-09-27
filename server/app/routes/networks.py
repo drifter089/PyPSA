@@ -4,6 +4,7 @@
 
 from fastapi import APIRouter, Request
 
+from app.editor.schemas import EditRequest, EditResponse
 from app.execution import execute
 from app.operations import Operation
 from app.schemas import (
@@ -14,6 +15,11 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/v1/networks", tags=["Networks"])
+
+
+@router.post("/edit", response_model=EditResponse)
+async def edit_network(body: EditRequest, request: Request):
+    return await execute(request, Operation.EDIT_NETWORK, body)
 
 
 @router.post("/inspect")

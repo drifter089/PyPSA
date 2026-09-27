@@ -7,13 +7,12 @@ import hashlib
 import json
 import logging
 import math
-import re
 import warnings
 from pathlib import Path
 
 import pandas as pd
-
 import pypsa
+
 from app.examples import EXAMPLES
 from app.schemas import ModelSource, NetworkModel, Source, Statistic
 
@@ -88,14 +87,12 @@ def from_model(model: NetworkModel, limits: dict) -> pypsa.Network:
     for component in sorted(model.components, key=lambda c: priority.get(c.type, 3)):
         if component.type not in COMPONENTS:
             raise ValueError(f"Unsupported component type: {component.type}")
+        from app.editor.metadata import expand_ports, scalar_value
+
+        expand_ports(n, component.type, component.attributes)
         defaults = n.components[component.type].defaults
         for attribute, value in component.attributes.items():
-            additional_port = component.type in {"Link", "Process"} and re.fullmatch(
-                r"(?:bus|efficiency)[2-9][0-9]*", attribute
-            )
-            if attribute == "name" or (
-                attribute not in defaults.index and not additional_port
-            ):
+            if attribute == "name" or attribute not in defaults.index:
                 raise ValueError(f"Unknown attribute {component.type}.{attribute}")
             if attribute in defaults.index and str(
                 defaults.at[attribute, "status"]
@@ -115,6 +112,10 @@ def from_model(model: NetworkModel, limits: dict) -> pypsa.Network:
                     raise ValueError(
                         f"Attribute {attribute} does not accept time series."
                     )
+                for item in value:
+                    scalar_value(defaults.loc[attribute], item)
+            else:
+                scalar_value(defaults.loc[attribute], value)
         n.add(component.type, component.name, **component.attributes)
     return n
 

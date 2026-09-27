@@ -4,6 +4,21 @@ A Python-only FastAPI wrapper around **this repository's local PyPSA source**.
 It lives in `server/` so it can be committed and deployed with the fork. No
 changes to the `pypsa/` library are required by the server.
 
+## Native editor catalogue and editing APIs
+
+The dedicated `app/editor/` package supplies native component definitions,
+conditional form rules, registry choices, ports, validation, and native patch
+editing. It includes explicit scalar/profile transitions and optional native
+technology/composition recipes.
+
+- `POST /v1/editor/catalog` — describe an empty or supplied network.
+- `POST /v1/editor/evaluate` — evaluate proposed edits and form states.
+- `POST /v1/networks/edit` — validate edits and return a new native input artifact.
+
+See [EDITOR_API.md](EDITOR_API.md) for requests, response fields, examples,
+capability limits, and error semantics. Swagger/OpenAPI include typed editor
+requests and responses. Editing does not invoke a solver.
+
 ## Code organisation
 
 ```text
@@ -602,6 +617,11 @@ Native import itself can allocate memory before dimensions are checked, so set
 container memory/CPU limits as well. See `.env.example` for all settings.
 
 ## Checks and upstream maintenance
+
+The repository's default pytest discovery targets the upstream `test/` directory,
+and its mypy discovery excludes `server/`. The inherited PyPSA CI therefore does
+not collect the backend's tests or type-check its code. Backend tests are run
+explicitly with the separate configuration below; no backend CI job is added.
 
 From the repository root:
 
