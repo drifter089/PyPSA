@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: PyPSA Contributors
+# SPDX-License-Identifier: MIT
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+      target: development
+    init: true
+    ports:
+      - "8000:8000"
+    environment:
+      SERVER_API_KEY: ${SERVER_API_KEY:-}
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-240}
+    volumes:
+      - ../pypsa:/src/pypsa:ro
+      - ./app:/src/server/app:ro
+    cpus: 2
+    mem_limit: 4g
+    stop_grace_period: 20s
