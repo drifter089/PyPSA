@@ -195,10 +195,98 @@ def test_power_flow(client, mode):
         assert "converged" in result["convergence"]
 
 
-def test_bundled_upstream_example(client):
-    response = client.get("/v1/examples/ac-dc-meshed")
+@pytest.mark.parametrize(
+    "name,buses", [("ac-dc-meshed", 9), ("storage-hvdc", 6), ("model-energy", 2)]
+)
+def test_bundled_upstream_example(client, name, buses):
+    response = client.get(f"/v1/examples/{name}")
     assert response.status_code == 200, response.text
-    assert len(response.json()["network"]["components"]["Bus"]["static"]["index"]) == 9
+    assert (
+        len(response.json()["network"]["components"]["Bus"]["static"]["index"]) == buses
+    )
+
+
+def test_statistics_preserve_filters_grouping_and_time_series(client):
+    source = model_source(demand=[10, 20])
+    source["model"].update(
+        {
+            "snapshots": ["2026-01-01T00:00:00", "2026-01-01T01:00:00"],
+            "snapshot_kind": "datetime",
+            "snapshot_weightings": {
+                "objective": [2, 3],
+                "generators": [2, 3],
+                "stores": [2, 3],
+            },
+        }
+    )
+    source["model"]["components"].extend(
+        [
+            {"type": "Carrier", "name": "heat"},
+            {"type": "Bus", "name": "heat", "attributes": {"carrier": "heat"}},
+            {
+                "type": "Generator",
+                "name": "heater",
+                "attributes": {"bus": "heat", "p_nom": 100, "marginal_cost": 2},
+            },
+            {
+                "type": "Load",
+                "name": "heat-demand",
+                "attributes": {"bus": "heat", "p_set": [3, 7]},
+            },
+        ]
+    )
+    queries = [
+        {
+            "metric": "supply",
+            "components": ["Generator"],
+            "groupby": "name",
+            "bus_carrier": "AC",
+            "groupby_time": False,
+        },
+        {
+            "metric": "supply",
+            "components": ["Generator"],
+            "groupby": "bus",
+            "bus_carrier": "AC",
+            "groupby_time": "mean",
+        },
+        {
+            "metric": "withdrawal",
+            "components": ["Load"],
+            "groupby": "name",
+            "bus_carrier": "heat",
+            "groupby_time": False,
+        },
+    ]
+    solved = post(client, "optimize", {"source": source, "statistics": queries})
+    assert solved["objective"] == pytest.approx(854)
+    stats = solved["statistics"]
+    for query, result in zip(queries, stats, strict=True):
+        assert result["parameters"] == {
+            key: value for key, value in query.items() if key != "metric"
+        }
+    assert stats[0]["table"]["data"] == [[10.0, 20.0]]
+    assert "name" in stats[0]["table"]["index_names"]
+    assert stats[1]["table"]["data"] == [[16.0]]
+    assert "bus" in stats[1]["table"]["index_names"]
+    assert stats[2]["table"]["data"] == [[3.0, 7.0]]
+    saved = post(
+        client, "statistics", {"source": solved["artifact"], "statistics": queries}
+    )
+    assert saved["statistics"] == stats
+
+
+def test_unsupported_statistics_options_are_rejected_not_dropped(client, solved):
+    for query in [
+        {"metric": "installed_capacity", "groupby_time": False},
+        {"metric": "prices", "components": ["Generator"]},
+    ]:
+        response = client.post(
+            "/v1/networks/statistics",
+            json={"source": solved["artifact"], "statistics": [query]},
+        )
+        assert response.status_code == 422, response.text
+        assert "unexpected keyword" in response.json()["detail"]
 
 
 def test_validation_and_bad_input(client):

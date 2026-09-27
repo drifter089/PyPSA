@@ -42,6 +42,8 @@ WORKDIR /src/server
 COPY --from=build /src/server/.venv ./.venv
 COPY --chown=appuser:appuser server/app ./app
 COPY --chown=appuser:appuser examples/networks/ac-dc-meshed/ac-dc-meshed.nc /src/examples/networks/ac-dc-meshed/ac-dc-meshed.nc
+COPY --chown=appuser:appuser examples/networks/storage-hvdc/storage-hvdc.nc /src/examples/networks/storage-hvdc/storage-hvdc.nc
+COPY --chown=appuser:appuser examples/networks/model-energy/model-energy.nc /src/examples/networks/model-energy/model-energy.nc
 
 USER appuser
 EXPOSE 8000

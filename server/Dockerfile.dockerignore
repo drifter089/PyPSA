@@ -17,6 +17,10 @@
 !examples/networks/
 !examples/networks/ac-dc-meshed/
 !examples/networks/ac-dc-meshed/ac-dc-meshed.nc
+!examples/networks/storage-hvdc/
+!examples/networks/storage-hvdc/storage-hvdc.nc
+!examples/networks/model-energy/
+!examples/networks/model-energy/model-energy.nc
 **/.env*
 **/.venv
 **/__pycache__

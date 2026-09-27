@@ -103,8 +103,8 @@ Metric = Literal[
 class Statistic(StrictModel):
     metric: Metric
     components: list[str] | None = None
-    groupby: Literal["carrier", "bus", "bus_carrier", "name", "unit"] = "carrier"
-    groupby_time: Literal["sum", "mean", False] = "sum"
+    groupby: Literal["carrier", "bus", "bus_carrier", "name", "unit"] | None = None
+    groupby_time: Literal["sum", "mean", False] | None = None
     bus_carrier: str | None = None
 
 

@@ -6,15 +6,12 @@ from importlib.metadata import version
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.examples import EXAMPLES
 from app.execution import execute
 from app.operations import Operation
 from app.schemas import ComponentRequest, ExampleRequest
 
 router = APIRouter(prefix="/v1", tags=["Metadata"])
-EXAMPLES = {
-    "two-bus": "Two-bus constrained economic dispatch",
-    "ac-dc-meshed": "Bundled upstream AC/DC meshed network",
-}
 
 
 @router.get("/capabilities")
@@ -51,8 +48,8 @@ async def component(component_type: str, request: Request):
 async def examples():
     return {
         "examples": [
-            {"id": name, "description": description}
-            for name, description in EXAMPLES.items()
+            {"id": name, "description": example["description"]}
+            for name, example in EXAMPLES.items()
         ]
     }
 

@@ -4,7 +4,6 @@
 
 import base64
 import hashlib
-import inspect
 import json
 import logging
 import math
@@ -15,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 import pypsa
+from app.examples import EXAMPLES
 from app.schemas import ModelSource, NetworkModel, Source, Statistic
 
 COMPONENTS = {
@@ -228,10 +228,9 @@ def statistics(n: pypsa.Network, queries: list[Statistic]) -> list[dict]:
     results = []
     for query in queries:
         method = getattr(n.statistics, query.metric)
-        parameters = inspect.signature(method).parameters
-        supplied = query.model_dump(exclude={"metric"}, exclude_none=True)
-        # Not every metric accepts time aggregation; inspect its public signature.
-        kwargs = {key: value for key, value in supplied.items() if key in parameters}
+        # PyPSA wraps statistics with (*args, **kwargs). Signature-based filtering
+        # would discard real options. Let its public API validate supplied options.
+        kwargs = query.model_dump(exclude={"metric"}, exclude_none=True)
         data = method(**kwargs)
         results.append(
             {"metric": query.metric, "parameters": kwargs, "table": table(data)}
@@ -240,14 +239,11 @@ def statistics(n: pypsa.Network, queries: list[Statistic]) -> list[dict]:
 
 
 def example(name: str) -> pypsa.Network:
-    if name == "ac-dc-meshed":
-        path = (
-            Path(__file__).resolve().parents[2]
-            / "examples/networks/ac-dc-meshed/ac-dc-meshed.nc"
-        )
-        return pypsa.Network(path)
-    if name != "two-bus":
+    if name not in EXAMPLES:
         raise ValueError("Unknown example.")
+    path = EXAMPLES[name]["path"]
+    if path is not None:
+        return pypsa.Network(Path(__file__).resolve().parents[2] / path)
     n = pypsa.Network(name="Two-bus dispatch")
     n.add("Carrier", "AC")
     n.add("Carrier", "gas")

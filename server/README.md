@@ -22,6 +22,7 @@ server/app/
 ├── execution.py             # Start/await/timeout/clean up a child per computation
 ├── worker.py                # Small registry-driven child-process entry point
 ├── network.py               # Shared PyPSA loading, conversion, and statistics helpers
+├── examples.py              # Shared offline example catalogue
 ├── middleware.py            # HTTP body-size limit
 ├── schemas.py               # Pydantic request models
 ├── config.py                # Environment configuration
@@ -82,7 +83,7 @@ There are three sources of network data:
 | --- | --- |
 | JSON component model in a request | Calls `pypsa.Network()`, `n.set_snapshots()`, and `n.add(...)` |
 | NetCDF artifact in a request | Decodes the bytes to a temporary file and calls `pypsa.Network(path)` |
-| A supported example ID | Constructs the two-bus example in Python or loads the bundled upstream AC/DC NetCDF file |
+| A supported example ID | Constructs the two-bus example or loads a bundled upstream NetCDF file |
 
 The component metadata endpoint is different from loading a user's model:
 
@@ -97,8 +98,8 @@ These definitions come from the installed PyPSA package, including files such as
 their units, defaults, and input/output roles. They are library metadata, not
 generator records fetched from a database or remote service.
 
-Computation workers disable PyPSA's automatic network downloads. The AC/DC example
-is copied into the Docker image during its build. Neither that endpoint nor the
+Computation workers disable PyPSA's automatic network downloads. Supported native
+examples are copied into the Docker image during its build. Neither that endpoint nor the
 model endpoints fetch a saved project from PostgreSQL. The caller must send the
 network inputs and save any results it wants to keep.
 
@@ -324,7 +325,8 @@ COPY --chown=appuser:appuser examples/networks/ac-dc-meshed/ac-dc-meshed.nc /src
 ```
 
 These instructions copy the already-built environment, our FastAPI code, and the
-bundled native example into the final image. The runtime uses installed PyPSA
+AC/DC example into the final image. The full Dockerfile also copies the storage/HVDC
+and model.energy examples. The runtime uses installed PyPSA
 from the virtual environment and needs neither Git nor the source checkout.
 
 ### Start FastAPI when a container starts
@@ -535,16 +537,54 @@ labels and units must be interpreted with grouping, time aggregation, and carrie
 units in mind.
 
 Statistics use public PyPSA methods and retain their weighting/grouping logic.
-`groupby_time: false` keeps snapshot series. Not every metric supports every
-filter; the response's `parameters` contains the arguments actually used. Do not
+`groupby_time: false` keeps snapshot series. Omitted grouping/time options use
+PyPSA's native defaults for the selected metric. Supplied options are forwarded
+directly; the response's `parameters` records them. Not every metric accepts every
+option: for example, `installed_capacity` does not accept `groupby_time`, and
+`prices` does not accept `components`. Unsupported options return `422`; they are
+never silently dropped. Do not
 interpret a statistic on an unsolved network as a verified solution. Imported
 network provenance is not authenticated by this service.
 
 The initial API supports deterministic, single-investment-period networks.
 Stochastic/multi-period inputs, patch-edit operations, custom constraints, broad
 example discovery, and arbitrary plotting conversion are outside this initial
-implementation. The supported examples are the small two-bus example and the
-repository's real `examples/networks/ac-dc-meshed/ac-dc-meshed.nc`, loaded offline.
+implementation.
+
+## Built-in example coverage
+
+The catalogue in `app/examples.py` includes these offline networks:
+
+| API example ID | Source | Buses | Snapshots |
+| --- | --- | --- | --- |
+| `two-bus` | Small constructed dispatch example | 2 | 1 |
+| `ac-dc-meshed` | `examples/networks/ac-dc-meshed/ac-dc-meshed.nc` | 9 | 10 |
+| `storage-hvdc` | `examples/networks/storage-hvdc/storage-hvdc.nc` | 6 | 12 |
+| `model-energy` | `examples/networks/model-energy/model-energy.nc` | 2 | 2,920 |
+
+These need no per-example optimisation code: load the example artifact and send
+it to the same `/v1/networks/optimize` and `/v1/networks/statistics` endpoints.
+The native snapshots carry their existing profiles, capacities, costs, storage,
+and supported global constraints.
+
+PyPSA also exposes example-loading functions in `pypsa/examples.py`. Those
+functions normally download versioned assets from PyPSA's data host. This API
+instead uses the checked-in files to make requests reproducible and offline.
+
+The other example files/functions have different requirements:
+
+- `scigrid_de`: 585 buses and 3,499 components in this checkout; it exceeds the
+  default 2,000-component limit and the intended country-scale exclusion.
+- `stochastic_network`: uses scenarios. API v1 explicitly rejects stochastic
+  inputs; supporting them needs contracts for scenario inputs and results.
+- `carbon_management`: exposed by PyPSA's Python helper but not bundled in this
+  checkout. It is a large sector-coupled example and is outside the intended scope.
+- Documentation notebooks are executable workflows, not just network files. Some
+  build custom constraints, run multiple analyses, or obtain external data. They
+  need curated adapters when their behaviour goes beyond a saved network.
+
+Adding a compatible saved-network example normally means adding one catalogue
+entry and including its artifact in the image, not writing a new endpoint.
 
 ## Errors and limits
 
@@ -566,8 +606,8 @@ container memory/CPU limits as well. See `.env.example` for all settings.
 From the repository root:
 
 ```bash
-uv run --project server ruff check --config server/pyproject.toml server/app server/tests
-uv run --project server ruff format --check --config server/pyproject.toml server/app server/tests
+uv run --project server ruff check --config server/pyproject.toml server/app server/tests server/scripts
+uv run --project server ruff format --check --config server/pyproject.toml server/app server/tests server/scripts
 uv run --project server pytest -c server/pyproject.toml server/tests -q
 ```
 
@@ -576,6 +616,21 @@ statistics, both power-flow modes, infeasibility, input checks, authentication
 across all grouped routes, timeout cleanup, and busy-instance behaviour. They
 also observe real process IDs to verify fresh subprocesses per computation and
 temporary-directory cleanup after success and timeout.
+
+After building the runtime image, exercise it over real HTTP without source
+mounts or rebuilding it:
+
+```bash
+uv run --project server python server/scripts/test_image.py pypsa-api:local
+```
+
+This uses temporary containers with 2 CPUs and 4 GiB of memory. It tests every
+endpoint, all exposed statistics, constructed dispatch/capacity/storage/conversion
+networks, compatible built-in examples at their full snapshot counts, explicit
+rejection of out-of-scope examples, authentication, transport limits, concurrent
+health checks, and timeout/disconnect cleanup. It removes its containers and
+prints the temporary JSON report path. Docker must be running; run it from a
+checkout containing the example assets.
 
 Keep changes in `server/` unless intentionally modifying PyPSA. Sync the fork with
 upstream as usual, regenerate `server/uv.lock` when its local library requirements
